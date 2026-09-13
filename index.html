@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PCOS Awareness Screener</title>
+  <title>PCOSense Sanjivani</title>
+  <meta name="description" content="PCOSense Sanjivani: An AI-Powered Digital Screening Framework for Early PCOS Risk Detection in Adolescents" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
@@ -144,7 +145,12 @@
     .bubble-row.user .bubble { background: var(--user-bg); color: var(--user-text); border-bottom-right-radius: 6px; box-shadow: 0 4px 14px rgba(139,92,246,.25); }
 
     .bubble.info { background: linear-gradient(160deg, #fff7ed, #fef3f9); border: 1.5px solid #fed7aa; }
-    .bubble.result { background: linear-gradient(160deg, #f5f3ff, #fdf2f8); border: 1.5px solid #ddd6fe; }
+    .bubble.result { background: linear-gradient(160deg, #f5f3ff, #fdf2f8); border: 1.5px solid #ddd6fe; animation: resultReveal 1.1s cubic-bezier(.22,1,.36,1) both; }
+    @keyframes resultReveal {
+      0%   { opacity: 0; transform: translateY(10px) scale(.97); box-shadow: 0 0 0 rgba(139,92,246,0); }
+      55%  { opacity: 1; transform: translateY(0) scale(1.01); box-shadow: 0 0 22px rgba(139,92,246,.22); }
+      100% { opacity: 1; transform: translateY(0) scale(1); box-shadow: 0 1px 2px rgba(30,41,59,.04); }
+    }
 
     .why-toggle {
       display: block; margin-top: 12px; font-size: .8rem; font-weight: 600; color: var(--accent-dark);
@@ -207,6 +213,36 @@
       padding: 10px 16px; font-size: .66rem; color: var(--footer-text);
       text-align: center; line-height: 1.5;
     }
+    .parent-link {
+      display: inline-block; margin-top: 6px; background: none; border: none;
+      color: var(--accent-dark); font-weight: 700; font-size: .72rem;
+      cursor: pointer; text-decoration: underline; font-family: var(--font-body);
+    }
+
+    /* ── Parent / Guardian info modal ── */
+    #parent-overlay {
+      position: fixed; inset: 0; background: rgba(30,20,50,.45); z-index: 40;
+      display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    #parent-overlay.open { display: flex; }
+    #parent-modal {
+      background: var(--surface); border-radius: 20px; max-width: 480px; width: 100%;
+      max-height: 82vh; overflow-y: auto; padding: 26px 24px; position: relative;
+      box-shadow: 0 24px 70px rgba(0,0,0,.28);
+      animation: modalIn .28s cubic-bezier(.22,1,.36,1) both;
+    }
+    @keyframes modalIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+    #parent-modal h2 { font-family: var(--font-head); font-size: 1.25rem; color: var(--accent-dark); margin-bottom: 14px; padding-right: 24px; }
+    #parent-modal p { font-size: .92rem; line-height: 1.6; color: var(--bot-text); margin-bottom: 14px; }
+    #parent-modal .parent-close {
+      position: absolute; top: 14px; right: 16px; background: none; border: none;
+      font-size: 1.3rem; cursor: pointer; color: var(--footer-text); line-height: 1;
+    }
+    #parent-modal .parent-ok {
+      display: block; width: 100%; margin-top: 6px; padding: 12px; border: none;
+      border-radius: 14px; background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: #fff; font-weight: 600; font-size: .95rem; cursor: pointer; font-family: var(--font-body);
+    }
 
     .error-bubble { background: #fff7ed; border: 1.5px solid #fdba74; color: #7c3a00; }
 
@@ -225,8 +261,8 @@
   <header>
     <div class="avatar" aria-hidden="true"><img src="doctor_avatar.jpg" alt="Friendly doctor avatar" /></div>
     <div class="titles">
-      <h1>PCOS Awareness Screener</h1>
-      <p>A student-built educational tool — not a medical device</p>
+      <h1>PCOSense Sanjivani</h1>
+      <p>An AI-Powered Digital Screening Framework for Early PCOS Risk Detection in Adolescents</p>
     </div>
     <div id="lang-toggle">
       <button id="lang-en" class="active" onclick="setLangUI('en')">EN</button>
@@ -238,20 +274,32 @@
   <div id="tray" class="hidden" role="form" aria-label="Answer input"></div>
 
   <footer>
-    <strong>For parents &amp; guardians:</strong> This is a student-built educational project, not a medical device. It uses self-reported symptoms to raise awareness about PCOS and to encourage teenagers to talk to a trusted adult and a doctor if something feels off. It is not a diagnostic tool.
+    A student-built educational project — not a medical device.
+    <br/>
+    <button class="parent-link" id="parent-link-btn" onclick="toggleParentInfo(true)">👪 For Parents & Guardians</button>
   </footer>
 </div>
 
+<div id="parent-overlay" onclick="if(event.target===this) toggleParentInfo(false)">
+  <div id="parent-modal">
+    <button class="parent-close" onclick="toggleParentInfo(false)" aria-label="Close">✕</button>
+    <h2 id="parent-modal-title">For Parents &amp; Guardians</h2>
+    <div id="parent-modal-body"></div>
+    <button class="parent-ok" id="parent-ok-btn" onclick="toggleParentInfo(false)">Got it</button>
+  </div>
+</div>
+
 <script>
-/* ══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════
    Configuration
    ═══════════════════════════════════════════════════════════════ */
-const API_BASE = "https://pcos-screener-v2.onrender.com"; // ← change to your deployed backend URL
+const API_BASE = "https://pcosense-sanjivani-api.onrender.com"; // ← change to your deployed backend URL
 
 let currentLang = "en"; // "en" | "mr"
 let userName = "Friend";
 let currentStep = -1;
 let answers = {};
+let trackingCode = null; // set once a screening_code exists for this session
 
 const chat = document.getElementById("chat");
 const tray = document.getElementById("tray");
@@ -267,6 +315,23 @@ const UI = {
     agree: "✅  Yes, I agree",
     decline: "🚫  No, I don't agree",
     declineMsg: "That's completely okay — without your permission we can't continue with the screening. You're always welcome to come back anytime you change your mind. 💙",
+    returningQ: "Have you used PCOSense Sanjivani before?",
+    firstTime: "🌱  First time here",
+    returning: "🔁  I have a tracking code",
+    codePrompt: "No problem — please enter your 6-character tracking code.",
+    codePlaceholder: "e.g. A1B2C3",
+    codeNotFound: "I couldn't find any screenings for that code. Let's just start a fresh one instead. 🌱",
+    trendIntro: "Here's what I found for your past screenings:",
+    trendContinue: "Would you like to do a new screening now too?",
+    yourCode: "🔖 Your tracking code is",
+    saveCode: "Save this — enter it next time to see how things have changed.",
+    parentTitle: "For Parents & Guardians",
+    parentBody: [
+      "This is a student-built educational project, not a medical device. It uses self-reported symptoms to raise awareness about PCOS — a common hormonal condition — and to encourage teenagers to have open, honest conversations with a trusted adult and a doctor if something feels off.",
+      "It is not a diagnostic tool and should never replace a proper medical evaluation. If your teenager shows you a result mentioning \"some indicators,\" please treat it as a gentle prompt to check in with them — not as a medical finding.",
+      "🔒 Privacy: responses are only stored with the teenager's explicit consent, kept secure, and never shared with any third party or advertiser.",
+      "🌐 This tool is available in both English and Marathi — use the toggle at the top of the chat to switch.",
+    ],
     familiarQ: "Before we start — do you already know what PCOS is?",
     yes: "✅  Yes", no: "🚫  No",
     nameQ: "What should I call you? (first name is totally fine)",
@@ -287,6 +352,23 @@ const UI = {
     agree: "✅  हो, मी सहमत आहे",
     decline: "🚫  नाही, मी सहमत नाही",
     declineMsg: "अगदी ठीक आहे — तुमच्या परवानगीशिवाय आम्ही तपासणी पुढे नेऊ शकत नाही. तुमचा विचार बदलल्यास तुम्ही केव्हाही परत येऊ शकता. 💙",
+    returningQ: "तुम्ही आधी PCOSense Sanjivani वापरले आहे का?",
+    firstTime: "🌱  पहिल्यांदाच येथे आहे",
+    returning: "🔁  माझ्याकडे ट्रॅकिंग कोड आहे",
+    codePrompt: "काही हरकत नाही — कृपया तुमचा ६ अक्षरी ट्रॅकिंग कोड टाका.",
+    codePlaceholder: "उदा. A1B2C3",
+    codeNotFound: "त्या कोडसाठी मला कोणतीही तपासणी सापडली नाही. चला नवीन तपासणी सुरू करूया. 🌱",
+    trendIntro: "तुमच्या मागील तपासण्यांमध्ये हे आढळले:",
+    trendContinue: "आता तुम्हाला नवीन तपासणी देखील करायची आहे का?",
+    yourCode: "🔖 तुमचा ट्रॅकिंग कोड आहे",
+    saveCode: "हा जपून ठेवा — पुढच्या वेळी बदल पाहण्यासाठी हा वापरा.",
+    parentTitle: "पालक आणि पालकांसाठी",
+    parentBody: [
+      "हा विद्यार्थ्याने तयार केलेला शैक्षणिक प्रकल्प आहे, वैद्यकीय उपकरण नाही. हे स्व-नोंदवलेल्या लक्षणांचा वापर करून PCOS — एक सामान्य हार्मोनल स्थिती — याबद्दल जागरूकता निर्माण करते आणि किशोरवयीन मुलींना काही जाणवल्यास विश्वासू मोठ्या व्यक्तीशी आणि डॉक्टरांशी मोकळेपणाने बोलण्यास प्रोत्साहित करते.",
+      "हे निदान करणारे साधन नाही आणि योग्य वैद्यकीय तपासणीची जागा कधीही घेऊ नये. जर तुमच्या मुलीने \"काही निर्देशक\" दर्शवणारा निकाल दाखवला, तर कृपया याला वैद्यकीय निष्कर्ष म्हणून नव्हे, तर तिच्याशी बोलण्याची सौम्य आठवण म्हणून घ्या.",
+      "🔒 गोपनीयता: उत्तरे फक्त किशोरवयीन मुलीच्या स्पष्ट संमतीनेच साठवली जातात, सुरक्षित ठेवली जातात आणि कोणत्याही तिसऱ्या पक्षाला किंवा जाहिरातदाराला कधीही दिली जात नाहीत.",
+      "🌐 हे साधन इंग्रजी आणि मराठी दोन्ही भाषांमध्ये उपलब्ध आहे — बदलण्यासाठी चॅटच्या वरच्या भागातील टॉगल वापरा.",
+    ],
     familiarQ: "सुरुवात करण्यापूर्वी — तुम्हाला PCOS म्हणजे काय हे आधीच माहित आहे का?",
     yes: "✅  हो", no: "🚫  नाही",
     nameQ: "मी तुम्हाला काय म्हणून हाक मारू? (फक्त पहिले नाव पुरेसे आहे)",
@@ -337,10 +419,18 @@ const STEPS = [
   },
   {
     key: "irregular_periods", type: "bool",
+    intro: {
+      en: "💡 <strong>Did you know?</strong> Irregular periods are very common in the first 1–2 years after your first period — it doesn't automatically mean something is wrong.",
+      mr: "💡 <strong>तुम्हाला माहित आहे का?</strong> पहिल्या मासिक पाळीनंतरच्या पहिल्या १-२ वर्षांत अनियमित पाळी येणे खूप सामान्य आहे — याचा अर्थ काहीतरी चुकीचे आहे असे नाही."
+    },
     question: { en: "Have your periods been irregular — skipping months or very unpredictable?", mr: "तुमची मासिक पाळी अनियमित आहे का — महिने चुकणे किंवा खूप अनिश्चित असणे?" },
   },
   {
     key: "facial_hair_growth", type: "bool",
+    intro: {
+      en: "💡 <strong>Did you know?</strong> Extra facial or body hair is usually linked to hormone changes, not just genetics — it's one of the most common (and treatable) PCOS-related symptoms.",
+      mr: "💡 <strong>तुम्हाला माहित आहे का?</strong> जास्त चेहऱ्यावरील किंवा शरीरावरील केस सहसा हार्मोन बदलांशी संबंधित असतात, फक्त आनुवंशिकतेशी नाही — हे PCOS शी संबंधित सर्वात सामान्य (आणि उपचार करण्यायोग्य) लक्षणांपैकी एक आहे."
+    },
     question: { en: "Have you noticed more facial hair growth (chin, upper lip, cheeks) than before?", mr: "तुम्हाला चेहऱ्यावर (हनुवटी, ओठांवर, गालांवर) आधीपेक्षा जास्त केस वाढलेले दिसले आहेत का?" },
   },
   {
@@ -361,6 +451,10 @@ const STEPS = [
   },
   {
     key: "family_history", type: "bool",
+    intro: {
+      en: "💡 <strong>Did you know?</strong> PCOS often runs in families, but having a relative with it doesn't mean you'll definitely get it too — it's just one piece of the picture.",
+      mr: "💡 <strong>तुम्हाला माहित आहे का?</strong> PCOS अनेकदा कुटुंबात आढळते, पण नातेवाईकाला ते असणे म्हणजे तुम्हालाही नक्की होईल असे नाही — हा फक्त एक भाग आहे."
+    },
     question: { en: "Does anyone in your close family (mother, sister, aunt) have PCOS or a similar hormonal condition?", mr: "तुमच्या जवळच्या कुटुंबात (आई, बहीण, मावशी/आत्या) कोणाला PCOS किंवा तत्सम हार्मोनल स्थिती आहे का?" },
   },
   {
@@ -427,6 +521,21 @@ function setLangUI(lang) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   Parent / Guardian info modal — available anytime, doesn't
+   interrupt or depend on where the user is in the chat flow.
+   ═══════════════════════════════════════════════════════════════ */
+function toggleParentInfo(open) {
+  const overlay = document.getElementById("parent-overlay");
+  if (open) {
+    document.getElementById("parent-modal-title").textContent = UI[currentLang].parentTitle;
+    document.getElementById("parent-modal-body").innerHTML =
+      UI[currentLang].parentBody.map(p => `<p>${p}</p>`).join("");
+    document.getElementById("parent-ok-btn").textContent = currentLang === "en" ? "Got it" : "समजले";
+  }
+  overlay.classList.toggle("open", open);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    Boot sequence: familiarity gate → (optional brief) → name → flow
    ═══════════════════════════════════════════════════════════════ */
 async function boot() {
@@ -454,7 +563,7 @@ function askConsent() {
     row.className = "yn-row";
     const yes = document.createElement("button");
     yes.className = "yn-btn yes"; yes.textContent = UI[currentLang].agree;
-    yes.onclick = () => { clearTray(); addUserBubble(UI[currentLang].agree); askFamiliarity(); };
+    yes.onclick = () => { clearTray(); addUserBubble(UI[currentLang].agree); askReturning(); };
     const no = document.createElement("button");
     no.className = "yn-btn no"; no.textContent = UI[currentLang].decline;
     no.onclick = () => {
@@ -476,6 +585,106 @@ function askConsent() {
     row.appendChild(yes); row.appendChild(no);
     tray.appendChild(row);
   }, 600);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Returning user / symptom trend tracker
+   ═══════════════════════════════════════════════════════════════ */
+function askReturning() {
+  showTyping();
+  setTimeout(() => {
+    removeTyping();
+    addBubble(escapeHtml(UI[currentLang].returningQ));
+    tray.innerHTML = ""; tray.classList.remove("hidden");
+    const row = document.createElement("div");
+    row.className = "yn-row";
+    const first = document.createElement("button");
+    first.className = "yn-btn yes"; first.textContent = UI[currentLang].firstTime;
+    first.onclick = () => { clearTray(); addUserBubble(UI[currentLang].firstTime); askFamiliarity(); };
+    const ret = document.createElement("button");
+    ret.className = "yn-btn no"; ret.textContent = UI[currentLang].returning;
+    ret.onclick = () => { clearTray(); addUserBubble(UI[currentLang].returning); promptForCode(); };
+    row.appendChild(first); row.appendChild(ret);
+    tray.appendChild(row);
+  }, 500);
+}
+
+function promptForCode() {
+  showTyping();
+  setTimeout(() => {
+    removeTyping();
+    addBubble(escapeHtml(UI[currentLang].codePrompt));
+    tray.innerHTML = ""; tray.classList.remove("hidden");
+    const row = document.createElement("div");
+    row.className = "row-flex";
+    const input = document.createElement("input");
+    input.type = "text"; input.maxLength = 6;
+    input.style.textTransform = "uppercase";
+    input.placeholder = UI[currentLang].codePlaceholder;
+    input.addEventListener("keydown", e => { if (e.key === "Enter") submitCode(input); });
+    const btn = document.createElement("button");
+    btn.className = "submit-btn"; btn.textContent = "→";
+    btn.onclick = () => submitCode(input);
+    row.appendChild(input); row.appendChild(btn);
+    tray.appendChild(row);
+    setTimeout(() => input.focus(), 200);
+  }, 500);
+}
+
+async function submitCode(input) {
+  const code = input.value.trim().toUpperCase();
+  if (!code) { shakeInput(input); return; }
+  clearTray();
+  addUserBubble(code);
+  showTyping();
+  try {
+    const res = await fetch(`${API_BASE}/trend/${code}`);
+    removeTyping();
+    if (!res.ok) {
+      addBubble(escapeHtml(UI[currentLang].codeNotFound));
+      setTimeout(askFamiliarity, 700);
+      return;
+    }
+    const data = await res.json();
+    trackingCode = code;
+
+    const lines = data.history.map((h, i) =>
+      `${i + 1}. ${h.date} — <strong>${h.band === "some_indicators" ? (currentLang === "en" ? "some indicators" : "काही निर्देशक") : (currentLang === "en" ? "low indicators" : "कमी निर्देशक")}</strong>`
+    ).join("<br/>");
+    addBubble(`${escapeHtml(UI[currentLang].trendIntro)}<br/><br/>${lines}`, "bot", "info");
+
+    setTimeout(() => {
+      showTyping();
+      setTimeout(() => {
+        removeTyping();
+        addBubble(escapeHtml(UI[currentLang].trendContinue));
+        tray.innerHTML = ""; tray.classList.remove("hidden");
+        const row = document.createElement("div");
+        row.className = "yn-row";
+        const yes = document.createElement("button");
+        yes.className = "yn-btn yes"; yes.textContent = UI[currentLang].yes;
+        yes.onclick = () => { clearTray(); addUserBubble(UI[currentLang].yes); askFamiliarity(); };
+        const no = document.createElement("button");
+        no.className = "yn-btn no"; no.textContent = UI[currentLang].no;
+        no.onclick = () => {
+          clearTray(); addUserBubble(UI[currentLang].no);
+          const restartRow = document.createElement("div");
+          restartRow.style.textAlign = "center";
+          const rb = document.createElement("button");
+          rb.className = "restart-btn"; rb.textContent = UI[currentLang].restart;
+          rb.onclick = restartApp;
+          restartRow.appendChild(rb);
+          chat.appendChild(restartRow);
+          scrollToBottom();
+        };
+        row.appendChild(yes); row.appendChild(no);
+        tray.appendChild(row);
+      }, 700);
+    }, 600);
+  } catch (e) {
+    removeTyping();
+    addBubble(UI[currentLang].connError, "bot", "error-bubble");
+  }
 }
 
 function askFamiliarity() {
@@ -647,7 +856,7 @@ async function submitToAPI() {
   showTyping();
   addBubble(escapeHtml(UI[currentLang].thinking));
   try {
-    const payload = Object.assign({ name: userName, language: currentLang, consent: true }, answers);
+    const payload = Object.assign({ name: userName, language: currentLang, consent: true, screening_code: trackingCode }, answers);
     const res = await fetch(`${API_BASE}/screen`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -671,6 +880,16 @@ async function submitToAPI() {
       toggleBtn.setAttribute("aria-expanded", String(!expanded));
       whyText.hidden = expanded;
     });
+
+    if (data.screening_code) {
+      trackingCode = data.screening_code;
+      setTimeout(() => {
+        addBubble(
+          `${UI[currentLang].yourCode}: <strong style="letter-spacing:2px;">${escapeHtml(data.screening_code)}</strong><br/><span style="font-size:.85em;">${escapeHtml(UI[currentLang].saveCode)}</span>`,
+          "bot", "info"
+        );
+      }, 400);
+    }
 
     setTimeout(() => {
       showTyping();
@@ -702,7 +921,7 @@ async function submitToAPI() {
 }
 
 function restartApp() {
-  currentStep = -1; answers = {}; userName = "Friend";
+  currentStep = -1; answers = {}; userName = "Friend"; trackingCode = null;
   chat.innerHTML = ""; clearTray();
   boot();
 }

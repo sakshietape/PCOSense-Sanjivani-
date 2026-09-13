@@ -23,7 +23,10 @@ THRESHOLD = bundle["threshold"]
 
 DB_PATH = "responses.db"
 
-app = FastAPI(title="PCOS Awareness Screener API")
+app = FastAPI(
+    title="PCOSense Sanjivani",
+    description="An AI-Powered Digital Screening Framework for Early PCOS Risk Detection in Adolescents",
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -86,6 +89,7 @@ def init_db():
                 family_history INTEGER,
                 blood_glucose_flag INTEGER,
                 consent_given INTEGER,
+                screening_code TEXT,
                 probability REAL,
                 band TEXT
             )
@@ -192,6 +196,7 @@ class ScreeningInput(BaseModel):
     family_history: bool = False
     blood_glucose_flag: bool = False
     consent: bool = True
+    screening_code: str | None = None
 
 
 def explain(data: ScreeningInput, irregular_counts: bool) -> str:
@@ -258,6 +263,12 @@ def screen(data: ScreeningInput):
     if data.name and data.name.strip() and data.name.strip().lower() != "friend":
         message = f"{data.name.strip()}, " + message[0].lower() + message[1:]
 
+    # ── Tracking code: reuse if the user supplied one, else generate ──
+    import random, string
+    code = (data.screening_code or "").strip().upper()
+    if not code:
+        code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
     # ── Store in DB (never expose raw probability to the client) ──
     ph = "%s" if USE_POSTGRES else "?"
     insert_sql = f"""
@@ -265,8 +276,8 @@ def screen(data: ScreeningInput):
             timestamp, name, language, age, years_since_menarche, bmi,
             acne, irregular_periods, facial_hair_growth, weight_gain,
             bloating, hair_thinning, fatigue, family_history,
-            blood_glucose_flag, consent_given, probability, band
-        ) VALUES ({",".join([ph] * 18)})
+            blood_glucose_flag, consent_given, screening_code, probability, band
+        ) VALUES ({",".join([ph] * 19)})
     """
     insert_values = (
         datetime.now(timezone.utc).isoformat(),
@@ -275,7 +286,7 @@ def screen(data: ScreeningInput):
         int(data.acne), int(data.irregular_periods), int(data.facial_hair_growth),
         int(data.weight_gain), int(data.bloating), int(data.hair_thinning),
         int(data.fatigue), int(data.family_history), int(data.blood_glucose_flag),
-        int(data.consent), round(prob, 4), band,
+        int(data.consent), code, round(prob, 4), band,
     )
     with get_db() as conn:
         if USE_POSTGRES:
@@ -288,11 +299,37 @@ def screen(data: ScreeningInput):
         "band": band,
         "message": message,
         "why": explain(data, irregular_counts),
+        "screening_code": code,
     }
 
 
 # ─────────────────────────────────────────────────────────────────
+# /trend — lets a returning user see their past screenings
+# ─────────────────────────────────────────────────────────────────
+
+@app.get("/trend/{code}")
+def get_trend(code: str):
+    code = code.strip().upper()
+    ph = "%s" if USE_POSTGRES else "?"
+    query = f"SELECT timestamp, band, name FROM responses WHERE screening_code = {ph} ORDER BY timestamp ASC"
+    with get_db() as conn:
+        if USE_POSTGRES:
+            cur = conn.cursor()
+            cur.execute(query, (code,))
+            rows = cur.fetchall()
+        else:
+            rows = conn.execute(query, (code,)).fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No screenings found for this code.")
+
+    history = [{"date": r["timestamp"][:10], "band": r["band"]} for r in rows]
+    return {"name": rows[-1]["name"], "count": len(history), "history": history}
+
+
+# ─────────────────────────────────────────────────────────────────
 # /admin — password-protected view of stored responses
+
 # ─────────────────────────────────────────────────────────────────
 
 security = HTTPBasic()
@@ -339,6 +376,7 @@ def admin_view(_: bool = Depends(check_admin)):
             <td>{'Y' if r['family_history'] else '-'}</td>
             <td>{'Y' if r['blood_glucose_flag'] else '-'}</td>
             <td>{'✓' if r['consent_given'] else '✗'}</td>
+            <td>{r['screening_code'] if r['screening_code'] else '-'}</td>
             <td>{r['probability']}</td>
             <td><strong>{r['band']}</strong></td>
         </tr>"""
@@ -365,7 +403,7 @@ def admin_view(_: bool = Depends(check_admin)):
                 <th>ID</th><th>Timestamp (UTC)</th><th>Name</th><th>Lang</th><th>Age</th>
                 <th>Yrs since menarche</th><th>BMI</th><th>Acne</th><th>Irregular periods</th>
                 <th>Facial hair</th><th>Weight gain</th><th>Bloating</th><th>Hair thinning</th>
-                <th>Fatigue</th><th>Family history</th><th>Blood glucose flag</th><th>Consent</th>
+                <th>Fatigue</th><th>Family history</th><th>Blood glucose flag</th><th>Consent</th><th>Code</th>
                 <th>Probability</th><th>Band</th>
             </tr>
             {table_rows}
