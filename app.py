@@ -311,7 +311,9 @@ def screen(data: ScreeningInput):
 def get_trend(code: str):
     code = code.strip().upper()
     ph = "%s" if USE_POSTGRES else "?"
-    query = f"SELECT timestamp, band, name FROM responses WHERE screening_code = {ph} ORDER BY timestamp ASC"
+    query = (f"SELECT timestamp, band, name, acne, irregular_periods, facial_hair_growth, weight_gain, "
+             f"bloating, hair_thinning, fatigue, family_history, blood_glucose_flag "
+             f"FROM responses WHERE screening_code = {ph} ORDER BY timestamp ASC")
     with get_db() as conn:
         if USE_POSTGRES:
             cur = conn.cursor()
@@ -324,7 +326,11 @@ def get_trend(code: str):
         raise HTTPException(status_code=404, detail="No screenings found for this code.")
 
     history = [{"date": r["timestamp"][:10], "band": r["band"]} for r in rows]
-    return {"name": rows[-1]["name"], "count": len(history), "history": history}
+    keys = ["acne", "irregular_periods", "facial_hair_growth", "weight_gain", "bloating",
+            "hair_thinning", "fatigue", "family_history", "blood_glucose_flag"]
+    last = rows[-1]
+    last_answers = {k: (None if last[k] is None else bool(last[k])) for k in keys}
+    return {"name": last["name"], "count": len(history), "history": history, "last_answers": last_answers}
 
 
 # ─────────────────────────────────────────────────────────────────

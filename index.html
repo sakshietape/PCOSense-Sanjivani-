@@ -293,13 +293,14 @@
 /* ═══════════════════════════════════════════════════════════════
    Configuration
    ═══════════════════════════════════════════════════════════════ */
-const API_BASE = "https://pcosense-sanjivani-api.onrender.com"; // ← change to your deployed backend URL
+const API_BASE = "http://127.0.0.1:8000"; // ← change to your deployed backend URL
 
 let currentLang = "en"; // "en" | "mr"
 let userName = "Friend";
 let currentStep = -1;
 let answers = {};
 let lastResult = null;
+let prevSnapshot = null; // last screening of a returning user: {date, band, answers}
 let trackingCode = null; // set once a screening_code exists for this session
 
 const chat = document.getElementById("chat");
@@ -346,6 +347,19 @@ const UI = {
     sendError: "⚠️ Something went wrong while sending your responses. Please check your connection and try again.",
     tryAgain: "Try again 🔄",
     summaryBtn: "📄 Download doctor-visit summary",
+    welcomeBack: n => `Welcome back, ${n}! 💙 Want to compare with your last screening?`,
+    cmpYes: "✅  Yes, compare",
+    notYou: "🔄  Not you? Start fresh",
+    lastTime: "Last time",
+    cmpTitle: "📊 Then vs now",
+    now: "Now",
+    bandLow: "low indicators",
+    bandSome: "some indicators",
+    cmpSame: "Pretty steady since last time. 🌷",
+    cmpBetter: "Good news — things look calmer than last time. 🌱",
+    cmpMore: "A few more things were noted this time. It's a good idea to mention it to a parent or doctor. 💙",
+    cmpBetterSym: "✅ Improved",
+    cmpNewSym: "👀 Newly noted",
   },
   mr: {
     letsGo: "चला सुरू करूया 💙",
@@ -384,6 +398,19 @@ const UI = {
     sendError: "⚠️ तुमची उत्तरे पाठवताना काहीतरी चुकले. कृपया कनेक्शन तपासा आणि पुन्हा प्रयत्न करा.",
     tryAgain: "पुन्हा प्रयत्न करा 🔄",
     summaryBtn: "📄 डॉक्टर भेटीसाठी सारांश डाउनलोड करा",
+    welcomeBack: n => `पुन्हा स्वागत, ${n}! 💙 मागील तपासणीशी तुलना करायची आहे का?`,
+    cmpYes: "✅  हो, तुलना करा",
+    notYou: "🔄  तुम्ही नाही? नव्याने सुरू करा",
+    lastTime: "मागच्या वेळी",
+    cmpTitle: "📊 आधी आणि आता",
+    now: "आता",
+    bandLow: "कमी निर्देशक",
+    bandSome: "काही निर्देशक",
+    cmpSame: "मागच्या वेळेपासून बऱ्यापैकी स्थिर. 🌷",
+    cmpBetter: "छान बातमी — मागच्या वेळेपेक्षा परिस्थिती शांत दिसते. 🌱",
+    cmpMore: "या वेळी काही गोष्टी जास्त नोंदल्या गेल्या. पालक किंवा डॉक्टरांना सांगणे चांगले. 💙",
+    cmpBetterSym: "✅ सुधारले",
+    cmpNewSym: "👀 नव्याने नोंदले",
   }
 };
 
@@ -593,7 +620,78 @@ function askConsent() {
 /* ═══════════════════════════════════════════════════════════════
    Returning user / symptom trend tracker
    ═══════════════════════════════════════════════════════════════ */
+/* ─── Remember this device ─── */
+const DEVICE_KEY = "pcosense_user";
+function loadDevice() { try { return JSON.parse(localStorage.getItem(DEVICE_KEY)); } catch (e) { return null; } }
+function saveDevice(code, name) { try { localStorage.setItem(DEVICE_KEY, JSON.stringify({ code, name })); } catch (e) {} }
+function clearDevice() { try { localStorage.removeItem(DEVICE_KEY); } catch (e) {} }
+
+function snapshotFrom(data) {
+  const last = data.history[data.history.length - 1];
+  return { date: last.date, band: last.band, answers: data.last_answers || {} };
+}
+
+function bandWord(b) { return b === "some_indicators" ? UI[currentLang].bandSome : UI[currentLang].bandLow; }
+
+function buildComparison(data) {
+  const t = UI[currentLang], labels = SUM[currentLang].labels, prev = prevSnapshot;
+  let verdict = t.cmpSame;
+  if (prev.band === "some_indicators" && data.band === "low_indicators") verdict = t.cmpBetter;
+  else if (prev.band === "low_indicators" && data.band === "some_indicators") verdict = t.cmpMore;
+  const better = [], fresh = [];
+  Object.keys(labels).forEach(k => {
+    if (typeof answers[k] !== "boolean" || typeof prev.answers[k] !== "boolean") return;
+    if (prev.answers[k] && !answers[k]) better.push(labels[k]);
+    if (!prev.answers[k] && answers[k]) fresh.push(labels[k]);
+  });
+  let html = `<strong>${t.cmpTitle}</strong><br/>${t.lastTime} (${escapeHtml(prev.date)}): <strong>${bandWord(prev.band)}</strong><br/>` +
+             `${t.now}: <strong>${bandWord(data.band)}</strong><br/><br/>${verdict}`;
+  if (better.length) html += `<br/><br/>${t.cmpBetterSym}: ${better.map(escapeHtml).join(", ")}`;
+  if (fresh.length) html += `<br/>${t.cmpNewSym}: ${fresh.map(escapeHtml).join(", ")}`;
+  return html;
+}
+
+function askWelcomeBack(saved) {
+  showTyping();
+  setTimeout(() => {
+    removeTyping();
+    addBubble(escapeHtml(UI[currentLang].welcomeBack(saved.name && saved.name !== "Friend" ? saved.name : (currentLang === "en" ? "friend" : "मैत्रिणी"))));
+    tray.innerHTML = ""; tray.classList.remove("hidden");
+    const row = document.createElement("div");
+    row.className = "yn-row";
+    const yes = document.createElement("button");
+    yes.className = "yn-btn yes"; yes.textContent = UI[currentLang].cmpYes;
+    yes.onclick = async () => {
+      clearTray(); addUserBubble(UI[currentLang].cmpYes); showTyping();
+      try {
+        const res = await fetch(`${API_BASE}/trend/${saved.code}`);
+        if (!res.ok) throw new Error("gone");
+        const data = await res.json();
+        removeTyping();
+        trackingCode = saved.code;
+        userName = saved.name || data.name || "Friend";
+        prevSnapshot = snapshotFrom(data);
+        addBubble(`${UI[currentLang].lastTime} (${escapeHtml(prevSnapshot.date)}): <strong>${bandWord(prevSnapshot.band)}</strong>`, "bot", "info");
+        setTimeout(showReadyMessage, 800);
+      } catch (e) {
+        removeTyping(); clearDevice(); askReturningMenu();
+      }
+    };
+    const no = document.createElement("button");
+    no.className = "yn-btn no"; no.textContent = UI[currentLang].notYou;
+    no.onclick = () => { clearDevice(); clearTray(); addUserBubble(UI[currentLang].notYou); askReturningMenu(); };
+    row.appendChild(yes); row.appendChild(no);
+    tray.appendChild(row);
+  }, 500);
+}
+
 function askReturning() {
+  const saved = loadDevice();
+  if (saved && saved.code) return askWelcomeBack(saved);
+  askReturningMenu();
+}
+
+function askReturningMenu() {
   showTyping();
   setTimeout(() => {
     removeTyping();
@@ -650,6 +748,7 @@ async function submitCode(input) {
     }
     const data = await res.json();
     trackingCode = code;
+    prevSnapshot = snapshotFrom(data);
 
     const lines = data.history.map((h, i) =>
       `${i + 1}. ${h.date} — <strong>${h.band === "some_indicators" ? (currentLang === "en" ? "some indicators" : "काही निर्देशक") : (currentLang === "en" ? "low indicators" : "कमी निर्देशक")}</strong>`
@@ -887,12 +986,19 @@ async function submitToAPI() {
 
     if (data.screening_code) {
       trackingCode = data.screening_code;
+      saveDevice(data.screening_code, userName);
       setTimeout(() => {
         addBubble(
           `${UI[currentLang].yourCode}: <strong style="letter-spacing:2px;">${escapeHtml(data.screening_code)}</strong><br/><span style="font-size:.85em;">${escapeHtml(UI[currentLang].saveCode)}</span>`,
           "bot", "info"
         );
       }, 400);
+    }
+
+    if (prevSnapshot) {
+      const snap = buildComparison(data);
+      setTimeout(() => addBubble(snap, "bot", "info"), 800);
+      prevSnapshot = null;
     }
 
     setTimeout(() => {
@@ -992,7 +1098,7 @@ function openSummary() {
 }
 
 function restartApp() {
-  currentStep = -1; answers = {}; userName = "Friend"; trackingCode = null;
+  currentStep = -1; answers = {}; userName = "Friend"; trackingCode = null; prevSnapshot = null;
   chat.innerHTML = ""; clearTray();
   boot();
 }
